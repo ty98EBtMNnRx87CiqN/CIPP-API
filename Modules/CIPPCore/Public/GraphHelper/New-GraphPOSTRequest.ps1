@@ -45,14 +45,16 @@ function New-GraphPOSTRequest {
 
         $RetryCount = 0
         $RequestSuccessful = $false
+        $RawErrorBody = $null
         do {
             try {
                 Write-Information "$($type.ToUpper()) [ $uri ] | tenant: $tenantid | attempt: $($RetryCount + 1) of $maxRetries"
-                $ReturnedData = (Invoke-RestMethod -Uri $($uri) -Method $TYPE -Body $body -Headers $headers -ContentType $contentType -SkipHttpErrorCheck:$IgnoreErrors -ResponseHeadersVariable responseHeaders)
+                $ReturnedData = (Invoke-CIPPRestMethod -Uri $($uri) -Method $TYPE -Body $body -Headers $headers -ContentType $contentType -SkipHttpErrorCheck:$IgnoreErrors -ResponseHeadersVariable responseHeaders)
                 $RequestSuccessful = $true
             } catch {
                 $ShouldRetry = $false
                 $WaitTime = 0
+                $RawErrorBody = $_.ErrorDetails.Message
                 $Message = if ($_.ErrorDetails.Message) {
                     Get-NormalizedError -Message $_.ErrorDetails.Message
                 } else {
@@ -133,6 +135,11 @@ function New-GraphPOSTRequest {
         }
 
         if ($RequestSuccessful -eq $false) {
+            if ($RawErrorBody) {
+                $GraphException = [System.Exception]::new($Message)
+                $GraphException.Data['RawErrorBody'] = $RawErrorBody
+                throw $GraphException
+            }
             throw $Message
         }
 
